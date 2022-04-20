@@ -1,6 +1,6 @@
-COS_FLEETSHARD_SYNC_VERSION = 1.0.0
-COS_FLEETSHARD_OPERATOR_CAMEL_VERSION = 1.0.0
-COS_FLEETSHARD_OPERATOR_DEBEZIUM_VERSION = 1.0.0
+COS_FLEETSHARD_SYNC_VERSION = 1.1.2
+COS_FLEETSHARD_OPERATOR_CAMEL_VERSION = 1.1.2
+COS_FLEETSHARD_OPERATOR_DEBEZIUM_VERSION = 1.1.2
 CAMEL_K_OPERATOR_VERSION = 1.8.0-rhoc
 STRIMZI_OPERATOR_VERSION = 0.28.0
 IMAGE_BASE = quay.io/abrianik
@@ -11,6 +11,23 @@ CAMEL_K_OPERATOR_BUNDLE_IMG = $(IMAGE_BASE)/camel-k-operator-bundle:$(CAMEL_K_OP
 STRIMZI_OPERATOR_BUNDLE_IMG = $(IMAGE_BASE)/strimzi-kafka-operator-bundle:$(STRIMZI_OPERATOR_VERSION)
 ADDON_BUNDLES_FOLDER = ../managed-tenants-bundles/addons/connectors-operator
 CATALOG_IMG = $(IMAGE_BASE)/addon-connectors-operator-catalog
+
+.PHONY: opm
+OPM = ./bin/opm
+opm: ## Download opm locally if necessary.
+ifeq (,$(wildcard $(OPM)))
+ifeq (,$(shell which opm 2>/dev/null))
+	@{ \
+	set -e ;\
+	mkdir -p $(dir $(OPM)) ;\
+	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
+	curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/v1.21.0/$${OS}-$${ARCH}-opm ;\
+	chmod +x $(OPM) ;\
+	}
+else
+OPM = $(shell which opm)
+endif
+endif
 
 .PHONY: bundle-build
 bundle-build:
@@ -28,22 +45,13 @@ bundle-push:
 	docker push ${CAMEL_K_OPERATOR_BUNDLE_IMG}
 	docker push ${STRIMZI_OPERATOR_BUNDLE_IMG}
 
-.PHONY: opm
-OPM = ./bin/opm
-opm: ## Download opm locally if necessary.
-ifeq (,$(wildcard $(OPM)))
-ifeq (,$(shell which opm 2>/dev/null))
-	@{ \
-	set -e ;\
-	mkdir -p $(dir $(OPM)) ;\
-	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
-	curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/v1.18.0/$${OS}-$${ARCH}-opm ;\
-	chmod +x $(OPM) ;\
-	}
-else
-OPM = $(shell which opm)
-endif
-endif
+.PHONY: bundle-validate
+bundle-validate: opm
+	$(OPM) alpha bundle validate --tag $(COS_FLEETSHARD_SYNC_BUNDLE_IMG)
+	$(OPM) alpha bundle validate --tag $(COS_FLEETSHARD_OPERATOR_CAMEL_BUNDLE_IMG)
+	$(OPM) alpha bundle validate --tag $(COS_FLEETSHARD_OPERATOR_DEBEZIUM_BUNDLE_IMG)
+	$(OPM) alpha bundle validate --tag $(CAMEL_K_OPERATOR_BUNDLE_IMG)
+	$(OPM) alpha bundle validate --tag $(STRIMZI_OPERATOR_BUNDLE_IMG)
 
 .PHONY: catalog-build
 catalog-build: opm
